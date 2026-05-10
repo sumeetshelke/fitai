@@ -3,7 +3,8 @@ import { Platform } from 'react-native';
 
 const TOKEN_KEY = 'fitai.authToken';
 const LOCAL_HOST = Platform.OS === 'android' ? '10.0.2.2' : 'localhost';
-const API_URL = process.env.EXPO_PUBLIC_API_URL || `http://${LOCAL_HOST}:4000`;
+const PRODUCTION_API_URL = 'https://fitai-api.onrender.com';
+const API_URL = process.env.EXPO_PUBLIC_API_URL || (__DEV__ ? `http://${LOCAL_HOST}:4000` : PRODUCTION_API_URL);
 
 async function request(path, options = {}) {
   const token = await AsyncStorage.getItem(TOKEN_KEY);
