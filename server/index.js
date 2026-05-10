@@ -1,6 +1,6 @@
 const http = require('http');
 const crypto = require('crypto');
-const { readDb, updateDb } = require('./db');
+const db = require('./db');
 const { createToken, hashPassword, sanitizeUser, verifyPassword, verifyToken } = require('./auth');
 
 const PORT = Number(process.env.PORT || 4000);
@@ -34,39 +34,12 @@ function readBody(req) {
   });
 }
 
-function requireUser(req) {
+async function requireUser(req) {
   const token = req.headers.authorization?.replace(/^Bearer\s+/i, '');
   const claims = verifyToken(token);
   if (!claims) return null;
 
-  const db = readDb();
-  const user = db.users.find(item => item.id === claims.sub);
-  if (!user) return null;
-  return user;
-}
-
-function getProfile(db, userId) {
-  return db.profiles.find(profile => profile.userId === userId);
-}
-
-function upsertProfile(db, userId, values) {
-  const existing = getProfile(db, userId);
-  const next = {
-    userId,
-    name: values.name?.trim() || existing?.name || '',
-    goal: values.goal || existing?.goal || null,
-    activity: values.activity || existing?.activity || null,
-    goalCal: Number(values.goalCal || existing?.goalCal || 2100),
-    updatedAt: new Date().toISOString(),
-  };
-
-  if (existing) {
-    Object.assign(existing, next);
-    return existing;
-  }
-
-  db.profiles.push({ ...next, createdAt: new Date().toISOString() });
-  return db.profiles[db.profiles.length - 1];
+  return db.findUserById(claims.sub);
 }
 
 function today() {
@@ -94,21 +67,15 @@ async function route(req, res) {
         return send(res, 400, { error: 'Name, valid email, and 6+ character password are required.' });
       }
 
-      const authResult = updateDb(db => {
-        if (db.users.some(user => user.email === email)) {
-          return { error: 'An account with this email already exists.' };
-        }
-
-        const user = {
-          id: crypto.randomUUID(),
-          email,
-          name,
-          passwordHash: hashPassword(password),
-          createdAt: new Date().toISOString(),
-        };
-        db.users.push(user);
-        const profile = upsertProfile(db, user.id, { name, goalCal: 2100 });
-        return { user, profile };
+      const authResult = await db.createUserWithProfile({
+        id: crypto.randomUUID(),
+        email,
+        name,
+        passwordHash: hashPassword(password),
+        createdAt: new Date().toISOString(),
+      }, {
+        name,
+        goalCal: 2100,
       });
 
       if (authResult.error) return send(res, 409, { error: authResult.error });
@@ -122,8 +89,7 @@ async function route(req, res) {
       const body = await readBody(req);
       const email = String(body.email || '').trim().toLowerCase();
       const password = String(body.password || '');
-      const db = readDb();
-      const user = db.users.find(item => item.email === email);
+      const user = await db.findUserByEmail(email);
 
       if (!user || !verifyPassword(password, user.passwordHash)) {
         return send(res, 401, { error: 'Invalid email or password.' });
@@ -131,79 +97,66 @@ async function route(req, res) {
 
       return send(res, 200, {
         token: createToken(user),
-        user: sanitizeUser(user, getProfile(db, user.id)),
+        user: sanitizeUser(user, await db.getProfile(user.id)),
       });
     }
 
-    const user = requireUser(req);
+    const user = await requireUser(req);
     if (!user) return send(res, 401, { error: 'Authentication required.' });
 
     if (req.method === 'GET' && path === '/auth/me') {
-      const db = readDb();
-      return send(res, 200, { user: sanitizeUser(user, getProfile(db, user.id)) });
+      return send(res, 200, { user: sanitizeUser(user, await db.getProfile(user.id)) });
     }
 
     if (req.method === 'PUT' && path === '/profile') {
       const body = await readBody(req);
-      const profile = updateDb(db => upsertProfile(db, user.id, body));
+      const profile = await db.upsertProfile(user.id, body);
       return send(res, 200, { user: sanitizeUser(user, profile) });
     }
 
     if (req.method === 'GET' && path === '/food-logs') {
-      const db = readDb();
-      const logs = db.foodLogs.filter(log => log.userId === user.id && (!url.searchParams.get('date') || log.loggedAt === url.searchParams.get('date')));
+      const logs = await db.listFoodLogs(user.id, url.searchParams.get('date'));
       return send(res, 200, { logs });
     }
 
     if (req.method === 'POST' && path === '/food-logs') {
       const body = await readBody(req);
-      const log = updateDb(db => {
-        const item = {
-          id: crypto.randomUUID(),
-          userId: user.id,
-          meal: String(body.meal || 'Snack'),
-          name: String(body.name || ''),
-          qty: String(body.qty || '1 serving'),
-          cal: Number(body.cal || 0),
-          prot: Number(body.prot || 0),
-          carb: Number(body.carb || 0),
-          fat: Number(body.fat || 0),
-          loggedAt: body.loggedAt || today(),
-          createdAt: new Date().toISOString(),
-        };
-        db.foodLogs.push(item);
-        return item;
+      const log = await db.createFoodLog({
+        id: crypto.randomUUID(),
+        userId: user.id,
+        meal: String(body.meal || 'Snack'),
+        name: String(body.name || ''),
+        qty: String(body.qty || '1 serving'),
+        cal: Number(body.cal || 0),
+        prot: Number(body.prot || 0),
+        carb: Number(body.carb || 0),
+        fat: Number(body.fat || 0),
+        loggedAt: body.loggedAt || today(),
+        createdAt: new Date().toISOString(),
       });
       return send(res, 201, { log });
     }
 
     if (req.method === 'DELETE' && path.startsWith('/food-logs/')) {
       const id = path.split('/').pop();
-      updateDb(db => {
-        db.foodLogs = db.foodLogs.filter(log => !(log.id === id && log.userId === user.id));
-      });
+      await db.deleteFoodLog(user.id, id);
       return send(res, 200, { ok: true });
     }
 
     if (req.method === 'GET' && path === '/workout-logs') {
-      const db = readDb();
-      const logs = db.workoutLogs.filter(log => log.userId === user.id && (!url.searchParams.get('date') || log.loggedAt === url.searchParams.get('date')));
+      const logs = await db.listWorkoutLogs(user.id, url.searchParams.get('date'));
       return send(res, 200, { logs });
     }
 
     if (req.method === 'POST' && path === '/workout-logs') {
       const body = await readBody(req);
-      const log = updateDb(db => {
-        const item = {
-          id: crypto.randomUUID(),
-          userId: user.id,
-          exercise: String(body.exercise || ''),
-          sets: Array.isArray(body.sets) ? body.sets : [],
-          loggedAt: body.loggedAt || today(),
-          createdAt: new Date().toISOString(),
-        };
-        db.workoutLogs.push(item);
-        return item;
+      const log = await db.createWorkoutLog({
+        id: crypto.randomUUID(),
+        userId: user.id,
+        exercise: String(body.exercise || ''),
+        sets: Array.isArray(body.sets) ? body.sets : [],
+        loggedAt: body.loggedAt || today(),
+        createdAt: new Date().toISOString(),
       });
       return send(res, 201, { log });
     }
@@ -211,11 +164,8 @@ async function route(req, res) {
     if (req.method === 'PUT' && path.startsWith('/workout-logs/')) {
       const id = path.split('/').pop();
       const body = await readBody(req);
-      const log = updateDb(db => {
-        const existing = db.workoutLogs.find(item => item.id === id && item.userId === user.id);
-        if (!existing) return null;
-        Object.assign(existing, { sets: Array.isArray(body.sets) ? body.sets : existing.sets });
-        return existing;
+      const log = await db.updateWorkoutLog(user.id, id, {
+        sets: Array.isArray(body.sets) ? body.sets : undefined,
       });
       if (!log) return send(res, 404, { error: 'Workout log not found.' });
       return send(res, 200, { log });

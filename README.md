@@ -1,6 +1,6 @@
 # FitAI
 
-React Native + Expo fitness tracker with a local Node backend, file-backed database, and token authentication.
+React Native + Expo fitness tracker with a local Node backend, Supabase database, and token authentication.
 
 ## Run The App
 
@@ -41,7 +41,7 @@ Available endpoints:
 - `POST /workout-logs`
 - `PUT /workout-logs/:id`
 
-The database is created automatically at `server/data/fitai-db.json` when the backend starts.
+The backend uses Supabase when `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are set. If those variables are missing, it falls back to a local JSON file for offline development.
 
 Passwords are stored as salted PBKDF2 hashes. The mobile app stores only the signed auth token in AsyncStorage.
 
@@ -52,6 +52,8 @@ Optional backend variables:
 ```bash
 PORT=4000
 JWT_SECRET=replace-this-for-real-deployments
+SUPABASE_URL=https://your-project-ref.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your-server-only-service-role-key
 ```
 
 Optional app variable:
@@ -68,11 +70,15 @@ EXPO_PUBLIC_API_URL=http://192.168.1.10:4000
 
 ## Deploy Backend On Render
 
-1. Push this `FitAI` folder to a GitHub repository.
-2. Open Render and choose New > Blueprint.
-3. Select the GitHub repository.
-4. Render will read `render.yaml` and create `fitai-api`.
-5. After deploy finishes, open:
+1. In Supabase, open SQL Editor and run `supabase-schema.sql`.
+2. In Supabase, copy your Project URL and service role key from Project Settings > API.
+3. Push this `FitAI` folder to a GitHub repository.
+4. Open Render and choose New > Blueprint.
+5. Select the GitHub repository.
+6. Render will read `render.yaml` and ask for:
+   - `SUPABASE_URL`
+   - `SUPABASE_SERVICE_ROLE_KEY`
+7. After deploy finishes, open:
 
 ```bash
 https://your-service-name.onrender.com/health
@@ -90,7 +96,7 @@ Then update the app environment:
 EXPO_PUBLIC_API_URL=https://your-service-name.onrender.com
 ```
 
-The Render service uses a persistent disk mounted at `/var/data`, so the file database survives redeploys.
+User data is stored in Supabase, so the Render service can use the free plan without a persistent disk.
 
 ## Features
 
