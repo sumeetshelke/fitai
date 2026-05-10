@@ -1,0 +1,11 @@
+node_modules/
+.expo/
+dist/
+dist-test/
+
+server/data/*.json
+server/data/*.log
+
+.env
+.env.local
+npm-debug.log*

@@ -1,0 +1,33 @@
+{
+  "expo": {
+    "name": "FitAI",
+    "slug": "fitai",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "backgroundColor": "#1D9E75"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.yourname.fitai"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#1D9E75"
+      },
+      "package": "com.yourname.fitai"
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "dbf659cc-392d-48c1-b2ea-2fa9ac1c382e"
+      }
+    },
+    "plugins": [
+      "expo-font"
+    ]
+  }
+}
