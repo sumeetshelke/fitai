@@ -8,19 +8,19 @@
       "developmentClient": true,
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://fitai-api.onrender.com"
+        "EXPO_PUBLIC_API_URL": "https://fitai-api-0dzz.onrender.com"
       }
     },
     "preview": {
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://fitai-api.onrender.com"
+        "EXPO_PUBLIC_API_URL": "https://fitai-api-0dzz.onrender.com"
       }
     },
     "production": {
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://fitai-api.onrender.com"
+        "EXPO_PUBLIC_API_URL": "https://fitai-api-0dzz.onrender.com"
       }
     }
   },
