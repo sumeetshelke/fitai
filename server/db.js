@@ -10,6 +10,7 @@ const initialData = {
   foodLogs: [],
   workoutLogs: [],
   weightLogs: [],
+  nutritionItems: [],
 };
 
 const hasSupabase = Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -49,6 +50,8 @@ function camelUser(row) {
     email: row.email,
     name: row.name,
     passwordHash: row.password_hash,
+    resetTokenHash: row.reset_token_hash,
+    resetTokenExpiresAt: row.reset_token_expires_at,
     createdAt: row.created_at,
   };
 }
@@ -92,6 +95,22 @@ function camelWorkoutLog(row) {
     sets: row.sets || [],
     loggedAt: row.logged_at,
     createdAt: row.created_at,
+  };
+}
+
+function camelNutritionItem(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    keys: row.keys || [],
+    serving: row.serving,
+    unit: row.unit,
+    calories: row.calories,
+    protein: row.protein,
+    carbs: row.carbs,
+    fat: row.fat,
+    micros: row.micros || {},
+    updatedAt: row.updated_at,
   };
 }
 
@@ -184,6 +203,31 @@ const fileStore = {
       return existing;
     });
   },
+
+  async listNutritionItems() {
+    return readFileDb().nutritionItems || [];
+  },
+
+  async savePasswordReset(email, resetTokenHash, resetTokenExpiresAt) {
+    return updateFileDb(db => {
+      const user = db.users.find(item => item.email === email);
+      if (!user) return null;
+      user.resetTokenHash = resetTokenHash;
+      user.resetTokenExpiresAt = resetTokenExpiresAt;
+      return user;
+    });
+  },
+
+  async resetPassword(email, passwordHash) {
+    return updateFileDb(db => {
+      const user = db.users.find(item => item.email === email);
+      if (!user) return null;
+      user.passwordHash = passwordHash;
+      user.resetTokenHash = null;
+      user.resetTokenExpiresAt = null;
+      return user;
+    });
+  },
 };
 
 const supabaseStore = {
@@ -213,6 +257,8 @@ const supabaseStore = {
         email: user.email,
         name: user.name,
         password_hash: user.passwordHash,
+        reset_token_hash: null,
+        reset_token_expires_at: null,
         created_at: user.createdAt,
       },
     });
@@ -327,6 +373,40 @@ const supabaseStore = {
       },
     });
     return camelWorkoutLog(rows?.[0]);
+  },
+
+  async listNutritionItems() {
+    const rows = await supabaseRequest('fitai_nutrition_items', {
+      query: '?select=*&active=eq.true&order=updated_at.desc',
+    });
+    return rows.map(camelNutritionItem);
+  },
+
+  async savePasswordReset(email, resetTokenHash, resetTokenExpiresAt) {
+    const rows = await supabaseRequest('fitai_users', {
+      method: 'PATCH',
+      query: `?email=eq.${encodeURIComponent(email)}`,
+      headers: { Prefer: 'return=representation' },
+      body: {
+        reset_token_hash: resetTokenHash,
+        reset_token_expires_at: resetTokenExpiresAt,
+      },
+    });
+    return camelUser(rows?.[0]);
+  },
+
+  async resetPassword(email, passwordHash) {
+    const rows = await supabaseRequest('fitai_users', {
+      method: 'PATCH',
+      query: `?email=eq.${encodeURIComponent(email)}`,
+      headers: { Prefer: 'return=representation' },
+      body: {
+        password_hash: passwordHash,
+        reset_token_hash: null,
+        reset_token_expires_at: null,
+      },
+    });
+    return camelUser(rows?.[0]);
   },
 };
 

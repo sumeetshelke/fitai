@@ -5,11 +5,12 @@ import { useApp } from '../context/AppContext';
 import { detectIngredientCalories, getIngredientSuggestions } from '../api';
 
 export default function FoodScreen() {
-  const { foodLog, addFoodItem, removeFoodItem, addMealCategory, totalCals, goalCal } = useApp();
+  const { foodLog, dailyHistory, addFoodItem, removeFoodItem, addMealCategory, totalCals, goalCal } = useApp();
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedMeal, setSelectedMeal] = useState('Breakfast');
   const [tab, setTab] = useState('estimate'); // 'estimate' | 'manual'
   const [customMealName, setCustomMealName] = useState('');
+  const [historyRange, setHistoryRange] = useState('today');
 
   // Estimate tab state
   const [dishName, setDishName] = useState('');
@@ -32,6 +33,7 @@ export default function FoodScreen() {
 
   const pct = Math.min(Math.round((totalCals / goalCal) * 100), 100);
   const meals = Object.keys(foodLog);
+  const history = getFoodHistorySummary(historyRange, foodLog, dailyHistory);
 
   function openModal(meal = 'Breakfast') {
     setSelectedMeal(meal);
@@ -140,6 +142,42 @@ export default function FoodScreen() {
             <Text style={styles.barLabel}>{totalCals.toLocaleString()} eaten</Text>
             <Text style={styles.barLabel}>{Math.max(0, goalCal - totalCals).toLocaleString()} remaining</Text>
           </View>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Food history</Text>
+          <View style={styles.historyTabs}>
+            {[
+              { key: 'today', label: 'Today' },
+              { key: 'yesterday', label: 'Yesterday' },
+              { key: 'week', label: 'Last 7 days' },
+            ].map(option => (
+              <TouchableOpacity
+                key={option.key}
+                style={[styles.historyTab, historyRange === option.key && styles.historyTabActive]}
+                onPress={() => setHistoryRange(option.key)}
+              >
+                <Text style={[styles.historyTabText, historyRange === option.key && styles.historyTabTextActive]}>{option.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <View style={styles.historyStats}>
+            <Text style={styles.historyStat}>{history.totals.cal} kcal</Text>
+            <Text style={styles.historyStat}>P {history.totals.prot}g</Text>
+            <Text style={styles.historyStat}>C {history.totals.carb}g</Text>
+            <Text style={styles.historyStat}>F {history.totals.fat}g</Text>
+          </View>
+          {history.items.length === 0 ? (
+            <Text style={styles.emptyText}>No food saved for this period yet.</Text>
+          ) : history.items.map((item, index) => (
+            <View key={`${item.date}-${index}`} style={styles.historyItem}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.foodName}>{item.name}</Text>
+                <Text style={styles.foodSub}>{item.date} · {item.meal} · P:{item.prot}g C:{item.carb}g F:{item.fat}g</Text>
+              </View>
+              <Text style={styles.foodCal}>{item.cal} kcal</Text>
+            </View>
+          ))}
         </View>
 
         <View style={styles.card}>
@@ -358,6 +396,44 @@ export default function FoodScreen() {
   );
 }
 
+function getFoodHistorySummary(range, currentFoodLog, dailyHistory) {
+  const dates = getHistoryDates(range);
+  const items = dates.flatMap(date => {
+    const foodLog = date === getLocalDate(0)
+      ? currentFoodLog
+      : dailyHistory[date]?.foodLog || {};
+
+    return Object.entries(foodLog).flatMap(([meal, mealItems]) =>
+      (mealItems || []).map(item => ({ ...item, meal, date }))
+    );
+  });
+
+  return {
+    items,
+    totals: items.reduce((total, item) => ({
+      cal: total.cal + (item.cal || 0),
+      prot: total.prot + (item.prot || 0),
+      carb: total.carb + (item.carb || 0),
+      fat: total.fat + (item.fat || 0),
+    }), { cal: 0, prot: 0, carb: 0, fat: 0 }),
+  };
+}
+
+function getHistoryDates(range) {
+  if (range === 'yesterday') return [getLocalDate(-1)];
+  if (range === 'week') return Array.from({ length: 7 }, (_, index) => getLocalDate(-index));
+  return [getLocalDate(0)];
+}
+
+function getLocalDate(offsetDays) {
+  const date = new Date();
+  date.setDate(date.getDate() + offsetDays);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   header: { padding: spacing.xl, paddingBottom: spacing.md, borderBottomWidth: 0.5, borderColor: colors.border },
@@ -366,6 +442,14 @@ const styles = StyleSheet.create({
   scroll: { padding: spacing.xl, paddingBottom: 100, gap: 4 },
   card: { backgroundColor: colors.background, borderWidth: 0.5, borderColor: colors.border, borderRadius: radius.lg, padding: 14, marginBottom: 12 },
   cardTitle: { fontSize: 13, fontWeight: '600', color: colors.textPrimary, marginBottom: 10 },
+  historyTabs: { flexDirection: 'row', gap: 6, backgroundColor: colors.backgroundSecondary, borderRadius: radius.md, padding: 4, marginBottom: 10 },
+  historyTab: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: radius.sm },
+  historyTabActive: { backgroundColor: colors.primary },
+  historyTabText: { fontSize: 12, color: colors.textSecondary, fontWeight: '600' },
+  historyTabTextActive: { color: colors.white },
+  historyStats: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
+  historyStat: { fontSize: 12, color: colors.primaryDark, backgroundColor: colors.primaryLight, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 99, fontWeight: '700' },
+  historyItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 9, borderTopWidth: 0.5, borderColor: colors.border },
   customMealRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
   addCustomMealBtn: { backgroundColor: colors.primary, borderRadius: radius.md, paddingHorizontal: 16, paddingVertical: 12 },
   addCustomMealText: { color: colors.white, fontSize: 13, fontWeight: '600' },

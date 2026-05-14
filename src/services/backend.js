@@ -41,6 +41,20 @@ export async function login({ email, password }) {
   return data.user;
 }
 
+export async function requestPasswordReset(email) {
+  return request('/auth/forgot-password', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
+}
+
+export async function resetPassword({ email, resetCode, password }) {
+  return request('/auth/reset-password', {
+    method: 'POST',
+    body: JSON.stringify({ email, resetCode, password }),
+  });
+}
+
 export async function logout() {
   await AsyncStorage.removeItem(TOKEN_KEY);
 }
@@ -96,6 +110,11 @@ export async function updateWorkoutLog(id, workout) {
     body: JSON.stringify(workout),
   });
   return data.log;
+}
+
+export async function listNutritionItems() {
+  const data = await request('/nutrition-items');
+  return data.items || [];
 }
 
 export { API_URL };

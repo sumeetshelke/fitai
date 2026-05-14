@@ -98,6 +98,27 @@ EXPO_PUBLIC_API_URL=https://your-service-name.onrender.com
 
 User data is stored in Supabase, so the Render service can use the free plan without a persistent disk.
 
+## Update Nutrition Data Without Rebuilding
+
+Nutrition data is now read from Supabase through the backend endpoint:
+
+```bash
+GET /nutrition-items
+```
+
+To add or edit foods without rebuilding the app, open Supabase > Table Editor > `fitai_nutrition_items`.
+
+Important columns:
+
+- `keys`: aliases used for matching, for example `{"rice","cooked rice","white rice"}`
+- `serving`: serving size number, for example `100`
+- `unit`: `g`, `ml`, `piece`, `tbsp`, etc.
+- `calories`, `protein`, `carbs`, `fat`
+- `micros`: JSON, for example `{"iron": 1, "magnesium": 3}`
+- `active`: set false to hide an item
+
+The app keeps built-in fallback data and merges Supabase rows on top, so Supabase edits can override existing foods or add new ones.
+
 ## Features
 
 - Signup and login with backend validation

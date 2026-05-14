@@ -46,6 +46,10 @@ function today() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function hashResetToken(token) {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
+
 async function route(req, res) {
   if (req.method === 'OPTIONS') return send(res, 204, {});
 
@@ -55,6 +59,11 @@ async function route(req, res) {
   try {
     if (req.method === 'GET' && path === '/health') {
       return send(res, 200, { ok: true, service: 'fitai-api' });
+    }
+
+    if (req.method === 'GET' && path === '/nutrition-items') {
+      const items = await db.listNutritionItems();
+      return send(res, 200, { items });
     }
 
     if (req.method === 'POST' && path === '/auth/signup') {
@@ -99,6 +108,56 @@ async function route(req, res) {
         token: createToken(user),
         user: sanitizeUser(user, await db.getProfile(user.id)),
       });
+    }
+
+    if (req.method === 'POST' && path === '/auth/forgot-password') {
+      const body = await readBody(req);
+      const email = String(body.email || '').trim().toLowerCase();
+
+      if (!email.includes('@')) {
+        return send(res, 400, { error: 'Enter a valid email address.' });
+      }
+
+      const token = String(crypto.randomInt(100000, 999999));
+      const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+      const user = await db.savePasswordReset(email, hashResetToken(token), expiresAt);
+
+      if (!user) {
+        return send(res, 200, { message: 'If that email exists, a reset code was created.' });
+      }
+
+      // TODO: Send this code by email with a provider such as Resend, SendGrid, or Supabase Edge Functions.
+      return send(res, 200, {
+        message: 'Use this reset code to set a new password.',
+        resetCode: token,
+        expiresAt,
+      });
+    }
+
+    if (req.method === 'POST' && path === '/auth/reset-password') {
+      const body = await readBody(req);
+      const email = String(body.email || '').trim().toLowerCase();
+      const resetCode = String(body.resetCode || '').trim();
+      const password = String(body.password || '');
+
+      if (!email.includes('@') || !resetCode || password.length < 6) {
+        return send(res, 400, { error: 'Email, reset code, and 6+ character password are required.' });
+      }
+
+      const user = await db.findUserByEmail(email);
+      const tokenHash = hashResetToken(resetCode);
+
+      if (
+        !user?.resetTokenHash ||
+        user.resetTokenHash !== tokenHash ||
+        !user.resetTokenExpiresAt ||
+        new Date(user.resetTokenExpiresAt).getTime() < Date.now()
+      ) {
+        return send(res, 400, { error: 'Reset code is invalid or expired.' });
+      }
+
+      await db.resetPassword(email, hashPassword(password));
+      return send(res, 200, { ok: true, message: 'Password updated. Please sign in.' });
     }
 
     const user = await requireUser(req);
