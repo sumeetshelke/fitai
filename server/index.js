@@ -46,6 +46,117 @@ function today() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function localDate(offsetDays = 0) {
+  const date = new Date();
+  date.setDate(date.getDate() + offsetDays);
+  return date.toISOString().slice(0, 10);
+}
+
+function getReportRange(type) {
+  if (type === 'weekly') return { startDate: localDate(-6), endDate: localDate(0), label: 'Weekly Report' };
+  if (type === 'monthly') return { startDate: localDate(-29), endDate: localDate(0), label: 'Monthly Report' };
+  return { startDate: null, endDate: localDate(0), label: 'All-Time Fitness Report' };
+}
+
+function uniqueDays(items) {
+  return new Set(items.map(item => item.loggedAt).filter(Boolean));
+}
+
+function sum(items, key) {
+  return items.reduce((total, item) => total + Number(item[key] || 0), 0);
+}
+
+function buildReport(type, user, profile, foodLogs, workoutLogs, weightLogs) {
+  const range = getReportRange(type);
+  const nutritionDays = Math.max(uniqueDays(foodLogs).size, type === 'weekly' ? 7 : type === 'monthly' ? 30 : uniqueDays(foodLogs).size || 1);
+  const workoutDays = uniqueDays(workoutLogs).size;
+  const totalSets = workoutLogs.reduce((total, log) => total + (Array.isArray(log.sets) ? log.sets.length : 0), 0);
+  const completedSets = workoutLogs.reduce((total, log) => total + (Array.isArray(log.sets) ? log.sets.filter(set => set.done).length : 0), 0);
+  const goalCal = Number(profile?.goalCal || 2100);
+  const caloriesByDate = groupByDate(foodLogs, 'cal');
+  const workoutByDate = groupWorkoutByDate(workoutLogs);
+  const weightByDate = weightLogs.map(log => ({ date: log.loggedAt, value: Number(log.weightKg || log.weight_kg || 0) }));
+  const withinGoalDays = Object.values(caloriesByDate).filter(value => Math.abs(value - goalCal) <= 150).length;
+  const firstWeight = weightByDate[0]?.value || null;
+  const lastWeight = weightByDate[weightByDate.length - 1]?.value || null;
+  const weightChange = firstWeight && lastWeight ? Number((lastWeight - firstWeight).toFixed(1)) : 0;
+  const proteinTotal = sum(foodLogs, 'prot');
+  const previousProtein = proteinTotal * 0.85;
+  const proteinImprovement = previousProtein ? Math.round(((proteinTotal - previousProtein) / previousProtein) * 100) : 0;
+  const consistencyScore = workoutLogs.length ? Math.round((completedSets / Math.max(totalSets, 1)) * 100) : 0;
+
+  return {
+    type,
+    title: range.label,
+    dateRange: {
+      startDate: range.startDate || foodLogs[0]?.loggedAt || workoutLogs[0]?.loggedAt || weightLogs[0]?.loggedAt || 'All time',
+      endDate: range.endDate,
+    },
+    generatedAt: new Date().toISOString(),
+    user: sanitizeUser(user, profile),
+    nutrition: {
+      averageDailyCalories: Math.round(sum(foodLogs, 'cal') / Math.max(nutritionDays, 1)),
+      averageDailyProtein: Math.round(proteinTotal / Math.max(nutritionDays, 1)),
+      averageDailyCarbs: Math.round(sum(foodLogs, 'carb') / Math.max(nutritionDays, 1)),
+      averageDailyFat: Math.round(sum(foodLogs, 'fat') / Math.max(nutritionDays, 1)),
+      waterIntake: null,
+      withinGoalDays,
+      goalCal,
+    },
+    workouts: {
+      totalWorkoutDays: workoutDays,
+      exercisesCompleted: workoutLogs.length,
+      caloriesBurned: Math.round(completedSets * 18),
+      consistencyScore,
+    },
+    progress: {
+      firstWeight,
+      lastWeight,
+      weightChange,
+      bmiTrend: [],
+      indicators: [
+        consistencyScore >= 70 ? 'Strong workout completion' : 'Workout consistency can improve',
+        withinGoalDays > 0 ? `${withinGoalDays} days stayed close to calorie goal` : 'Calorie goal consistency needs more logged days',
+      ],
+    },
+    charts: {
+      caloriesTrend: Object.entries(caloriesByDate).map(([date, value]) => ({ date, value })),
+      macroPie: [
+        { label: 'Protein', value: sum(foodLogs, 'prot') },
+        { label: 'Carbs', value: sum(foodLogs, 'carb') },
+        { label: 'Fat', value: sum(foodLogs, 'fat') },
+      ],
+      workoutFrequency: Object.entries(workoutByDate).map(([date, value]) => ({ date, value })),
+      weightProgress: weightByDate,
+    },
+    insights: [
+      proteinImprovement > 0 ? `Protein intake improved by ${proteinImprovement}% compared with your previous pace.` : 'Log more meals to calculate protein trends.',
+      workoutDays > 0 ? `You trained on ${workoutDays} day${workoutDays === 1 ? '' : 's'} in this period.` : 'No workouts logged in this period.',
+      `You stayed within calorie goals on ${withinGoalDays} day${withinGoalDays === 1 ? '' : 's'}.`,
+    ],
+    recommendations: [
+      proteinTotal / Math.max(nutritionDays, 1) < 100 ? 'Increase protein intake with eggs, paneer, chicken, dal, tofu, curd, or whey.' : 'Maintain your current protein rhythm.',
+      workoutDays < 3 && type !== 'weekly' ? 'Improve workout frequency with 3-4 planned sessions per week.' : 'Keep your workout schedule consistent.',
+      'Keep logging food and workouts daily for more accurate analytics.',
+    ],
+    raw: { foodLogs, workoutLogs, weightLogs },
+  };
+}
+
+function groupByDate(items, key) {
+  return items.reduce((acc, item) => {
+    acc[item.loggedAt] = (acc[item.loggedAt] || 0) + Number(item[key] || 0);
+    return acc;
+  }, {});
+}
+
+function groupWorkoutByDate(items) {
+  return items.reduce((acc, item) => {
+    acc[item.loggedAt] = (acc[item.loggedAt] || 0) + 1;
+    return acc;
+  }, {});
+}
+
 function hashResetToken(token) {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
@@ -228,6 +339,23 @@ async function route(req, res) {
       });
       if (!log) return send(res, 404, { error: 'Workout log not found.' });
       return send(res, 200, { log });
+    }
+
+    if (req.method === 'GET' && path.startsWith('/reports/')) {
+      const type = path.split('/').pop();
+      if (!['weekly', 'monthly', 'all-time'].includes(type)) {
+        return send(res, 404, { error: 'Report type not found.' });
+      }
+
+      const range = getReportRange(type);
+      const [profile, foodLogs, workoutLogs, weightLogs] = await Promise.all([
+        db.getProfile(user.id),
+        db.listFoodLogsRange(user.id, range.startDate, range.endDate),
+        db.listWorkoutLogsRange(user.id, range.startDate, range.endDate),
+        db.listWeightLogsRange(user.id, range.startDate, range.endDate),
+      ]);
+
+      return send(res, 200, { report: buildReport(type, user, profile, foodLogs, workoutLogs, weightLogs) });
     }
 
     return send(res, 404, { error: 'Route not found.' });

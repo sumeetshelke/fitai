@@ -117,4 +117,9 @@ export async function listNutritionItems() {
   return data.items || [];
 }
 
+export async function getReport(type) {
+  const data = await request(`/reports/${type}`);
+  return data.report;
+}
+
 export { API_URL };

@@ -40,6 +40,9 @@ Available endpoints:
 - `GET /workout-logs`
 - `POST /workout-logs`
 - `PUT /workout-logs/:id`
+- `GET /reports/weekly`
+- `GET /reports/monthly`
+- `GET /reports/all-time`
 
 The backend uses Supabase when `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are set. If those variables are missing, it falls back to a local JSON file for offline development.
 
@@ -129,3 +132,24 @@ The app keeps built-in fallback data and merges Supabase rows on top, so Supabas
 - Calorie and macro tracking
 - Workout sets, reps, and completion tracking
 - Theme switcher
+- PDF-ready weekly, monthly, and all-time fitness reports
+
+## Reports
+
+The backend aggregates Supabase data from:
+
+- `fitai_food_logs`
+- `fitai_workout_logs`
+- `fitai_weight_logs`
+
+Report endpoints return structured analytics:
+
+```bash
+GET /reports/weekly
+GET /reports/monthly
+GET /reports/all-time
+```
+
+The app uses `expo-print` and `expo-sharing` to generate and share PDF reports on mobile. On web preview, it downloads an HTML report that can be saved as PDF from the browser print dialog.
+
+Backend changes can be deployed to Render without reinstalling the app. A new app screen, like the Reports tab, requires an Expo/EAS Update or app rebuild once so users have the new UI.

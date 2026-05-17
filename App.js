@@ -15,6 +15,7 @@ import HomeScreen from './src/screens/HomeScreen';
 import FoodScreen from './src/screens/FoodScreen';
 import WorkoutScreen from './src/screens/WorkoutScreen';
 import VitaminsScreen from './src/screens/VitaminsScreen';
+import ReportsScreen from './src/screens/ReportsScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 
 const Stack = createStackNavigator();
@@ -25,6 +26,7 @@ const TAB_ICONS = {
   FoodTab: 'F',
   WorkoutTab: 'W',
   VitaminsTab: 'V',
+  ReportsTab: 'R',
 };
 
 function MainTabs() {
@@ -64,6 +66,7 @@ function MainTabs() {
       <Tab.Screen name="FoodTab" component={FoodScreen} options={{ tabBarLabel: 'Food' }} />
       <Tab.Screen name="WorkoutTab" component={WorkoutScreen} options={{ tabBarLabel: 'Workout' }} />
       <Tab.Screen name="VitaminsTab" component={VitaminsScreen} options={{ tabBarLabel: 'Vitamins' }} />
+      <Tab.Screen name="ReportsTab" component={ReportsScreen} options={{ tabBarLabel: 'Reports' }} />
     </Tab.Navigator>
   );
 }

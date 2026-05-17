@@ -171,6 +171,14 @@ const fileStore = {
     return readFileDb().foodLogs.filter(log => log.userId === userId && (!date || log.loggedAt === date));
   },
 
+  async listFoodLogsRange(userId, startDate, endDate) {
+    return readFileDb().foodLogs.filter(log =>
+      log.userId === userId &&
+      (!startDate || log.loggedAt >= startDate) &&
+      (!endDate || log.loggedAt <= endDate)
+    );
+  },
+
   async createFoodLog(log) {
     return updateFileDb(db => {
       db.foodLogs.push(log);
@@ -186,6 +194,22 @@ const fileStore = {
 
   async listWorkoutLogs(userId, date) {
     return readFileDb().workoutLogs.filter(log => log.userId === userId && (!date || log.loggedAt === date));
+  },
+
+  async listWorkoutLogsRange(userId, startDate, endDate) {
+    return readFileDb().workoutLogs.filter(log =>
+      log.userId === userId &&
+      (!startDate || log.loggedAt >= startDate) &&
+      (!endDate || log.loggedAt <= endDate)
+    );
+  },
+
+  async listWeightLogsRange(userId, startDate, endDate) {
+    return readFileDb().weightLogs.filter(log =>
+      log.userId === userId &&
+      (!startDate || log.loggedAt >= startDate) &&
+      (!endDate || log.loggedAt <= endDate)
+    );
   },
 
   async createWorkoutLog(log) {
@@ -311,6 +335,15 @@ const supabaseStore = {
     return rows.map(camelFoodLog);
   },
 
+  async listFoodLogsRange(userId, startDate, endDate) {
+    const startFilter = startDate ? `&logged_at=gte.${encodeURIComponent(startDate)}` : '';
+    const endFilter = endDate ? `&logged_at=lte.${encodeURIComponent(endDate)}` : '';
+    const rows = await supabaseRequest('fitai_food_logs', {
+      query: `?select=*&user_id=eq.${encodeURIComponent(userId)}${startFilter}${endFilter}&order=logged_at.asc,created_at.asc`,
+    });
+    return rows.map(camelFoodLog);
+  },
+
   async createFoodLog(log) {
     const rows = await supabaseRequest('fitai_food_logs', {
       method: 'POST',
@@ -345,6 +378,30 @@ const supabaseStore = {
       query: `?select=*&user_id=eq.${encodeURIComponent(userId)}${dateFilter}&order=created_at.asc`,
     });
     return rows.map(camelWorkoutLog);
+  },
+
+  async listWorkoutLogsRange(userId, startDate, endDate) {
+    const startFilter = startDate ? `&logged_at=gte.${encodeURIComponent(startDate)}` : '';
+    const endFilter = endDate ? `&logged_at=lte.${encodeURIComponent(endDate)}` : '';
+    const rows = await supabaseRequest('fitai_workout_logs', {
+      query: `?select=*&user_id=eq.${encodeURIComponent(userId)}${startFilter}${endFilter}&order=logged_at.asc,created_at.asc`,
+    });
+    return rows.map(camelWorkoutLog);
+  },
+
+  async listWeightLogsRange(userId, startDate, endDate) {
+    const startFilter = startDate ? `&logged_at=gte.${encodeURIComponent(startDate)}` : '';
+    const endFilter = endDate ? `&logged_at=lte.${encodeURIComponent(endDate)}` : '';
+    const rows = await supabaseRequest('fitai_weight_logs', {
+      query: `?select=*&user_id=eq.${encodeURIComponent(userId)}${startFilter}${endFilter}&order=logged_at.asc`,
+    });
+    return rows.map(row => ({
+      id: row.id,
+      userId: row.user_id,
+      weightKg: row.weight_kg,
+      loggedAt: row.logged_at,
+      createdAt: row.created_at,
+    }));
   },
 
   async createWorkoutLog(log) {
